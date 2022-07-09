@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/go-redis/redis"
@@ -19,6 +21,11 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
+
+var cli = redis.NewClient(&redis.Options{
+	Addr: "localhost:6379",
+})
+var rh = rejson.NewReJSONHandler()
 
 type Message struct {
 	Username string `json:"username"`
@@ -43,10 +50,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	ws.WriteJSON(Message{Username: "Server", Message: "Welcome! Id: " + strconv.Itoa(clientId)})
 	clientId++
 
-	broadcast <- Message{
-		Username: "Server",
-		Message:  "A new user has joined the chat",
-	}
+	// broadcast <- Message{
+	// 	Username: "Server",
+	// 	Message:  "A new user has joined the chat",
+	// }
+	b, _ := json.Marshal(Message{Username: "Server", Message: "Welcome! Id: " + strconv.Itoa(clientId)})
+	_ = cli.Publish("chat", b).Err()
 
 	// Bucle infinito que espera continuamente que se escriba  un nuevo mensaje en el WebSocket, lo desserializa de JSON a un objeto Message y luego lo arroja al canal de difusión.
 	for {
@@ -58,20 +67,35 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error: %v", err)
 			delete(clients, ws)
-			broadcast <- Message{Username: "system", Message: "User disconnected"}
+			b, _ = json.Marshal(Message{
+				Username: "Server",
+				Message:  "A user has left the chat",
+			})
+			_ = cli.Publish("chat", b).Err()
 			break
 		}
 
 		// Send the newly received message to the broadcast channel
-		broadcast <- msg
+		b, _ := json.Marshal(msg)
+		_ = cli.Publish("chat", b).Err()
 	}
 }
 
 func handleMessages() {
-	for {
-		msg := <-broadcast
+	pubsub := cli.Subscribe("chat")
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+
+	for msg := range ch {
+		var message Message
+		err := json.Unmarshal([]byte(msg.Payload), &message)
+		if err != nil {
+			log.Printf("error: %v", err)
+		}
+
 		for client := range clients {
-			err := client.WriteJSON(msg)
+			err := client.WriteJSON(message)
 			if err != nil {
 				log.Printf("error: %v", err)
 				client.Close()
@@ -87,10 +111,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	cli := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-	rh := rejson.NewReJSONHandler()
+	port := os.Getenv("PORT")
 	rh.SetGoRedisClient(cli)
 
 	testMessage := Message{
@@ -105,8 +126,8 @@ func main() {
 
 	go handleMessages()
 
-	log.Println("http server started on :8080")
-	err := http.ListenAndServe(":8080", nil)
+	log.Println("http server started on " + port)
+	err := http.ListenAndServe(":"+port, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}

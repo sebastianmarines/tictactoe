@@ -23,9 +23,17 @@ var upgrader = websocket.Upgrader{
 }
 
 var cli = redis.NewClient(&redis.Options{
-	Addr: "localhost:6379",
+	Addr: getEnv("REDIS_HOST", "localhost") + ":" + getEnv("REDIS_PORT", "6379"),
 })
 var rh = rejson.NewReJSONHandler()
+
+func getEnv(key, fallback string) string {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		value = fallback
+	}
+	return value
+}
 
 type Message struct {
 	Username string `json:"username"`

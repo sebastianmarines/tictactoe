@@ -5,3 +5,17 @@ services:
     image: redislabs/rejson:latest
     ports:
       - "6379:6379"
+  backend1:
+    build:
+      context: .
+    environment:
+      - REDIS_HOST=redis
+    ports:
+      - "8080:8080"
+  backend2:
+    build:
+      context: .
+    environment:
+      - REDIS_HOST=redis
+    ports:
+      - "8081:8080"

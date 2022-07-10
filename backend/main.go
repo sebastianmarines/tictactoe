@@ -27,14 +27,6 @@ var cli = redis.NewClient(&redis.Options{
 })
 var rh = rejson.NewReJSONHandler()
 
-func getEnv(key, fallback string) string {
-	value, exists := os.LookupEnv(key)
-	if !exists {
-		value = fallback
-	}
-	return value
-}
-
 type Message struct {
 	Username string `json:"username"`
 	Message  string `json:"message"`
@@ -55,14 +47,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	// Registramos nuestro nuevo cliente al agregarlo al mapa global de "clients" que fue creado anteriormente.
 	clients[ws] = true
 
-	ws.WriteJSON(Message{Username: "Server", Message: "Welcome! Id: " + strconv.Itoa(clientId)})
+	ws.WriteJSON(Message{Username: "server_assign", Message: "x"})
 	clientId++
 
 	// broadcast <- Message{
 	// 	Username: "Server",
 	// 	Message:  "A new user has joined the chat",
 	// }
-	b, _ := json.Marshal(Message{Username: "Server", Message: "Welcome! Id: " + strconv.Itoa(clientId)})
+	b, _ := json.Marshal(Message{Username: "Server", Message: "A new user connected"})
 	_ = cli.Publish("chat", b).Err()
 
 	// Bucle infinito que espera continuamente que se escriba  un nuevo mensaje en el WebSocket, lo desserializa de JSON a un objeto Message y luego lo arroja al canal de difusión.
